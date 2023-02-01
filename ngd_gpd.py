@@ -13,7 +13,7 @@ extent = Extent.from_bbox((385022, 251510, 385521, 251799), crs=crs)
 # (383184, 254503, 383819, 254792)
 # (384863, 254429, 385181, 254573) cathedral
 # (385022, 251510, 385521, 251799) carrington
-collection = "bld-fts-buildingpart"
+collection = "bld-fts"
 ngd = NGD(key, collection)
 bldpart = ngd.query(extent=extent, crs=crs)
 

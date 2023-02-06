@@ -1,6 +1,7 @@
 from osdatahub import DataPackageDownload
 from urllib.request import urlopen
 import json
+import requests
 
 key = 'gP228DpHXZ2BWdrmffMmUNhzAFyuuE27'
 dp = "929"
@@ -19,4 +20,6 @@ encoding = webURL.info().get_content_charset('utf-8')
 files = json.loads(dl.decode(encoding))
 
 for f in files['downloads']:
+    r = requests.get(f["url"], allow_redirects=True)
+    open(f["fileName"], 'wb').write(r.content)
     print("...", f["url"][48:])

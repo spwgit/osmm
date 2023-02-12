@@ -47,7 +47,7 @@ for item in os.listdir(dlCachePath):
 
 ogr = gdaltools.ogr2ogr()
 ogr.set_encoding("UTF-8")
-conn = gdaltools.PgConnectionString(host="localhost", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres..")
+conn = gdaltools.PgConnectionString(pgConnStr)
 srs = 'EPSG:27700'
 
 for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):

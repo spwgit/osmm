@@ -18,7 +18,6 @@ else:
     pgConnStr = 'host="sw2-gis.wychavon.gov.uk", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres.."'
     gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 
-
 key = 'gP228DpHXZ2BWdrmffMmUNhzAFyuuE27'
 dp = "929"
 v = "2361"

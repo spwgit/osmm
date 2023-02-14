@@ -16,6 +16,7 @@ else:
     gpkgPath = "c:\\os_ngd_features\\"
     unzipped = "unzipped\\"
     pgConnStr = 'host="sw2-gis.wychavon.gov.uk", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres.."'
+    gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 
 
 key = 'gP228DpHXZ2BWdrmffMmUNhzAFyuuE27'
@@ -43,7 +44,6 @@ for item in os.listdir(dlCachePath):
     if item != 'unzipped':
         with zipfile.ZipFile(os.path.join(dlCachePath, item), 'r') as zObject:
             zObject.extractall(path= dlCachePath + unzipped)
-
 
 ogr = gdaltools.ogr2ogr()
 ogr.set_encoding("UTF-8")

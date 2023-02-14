@@ -12,9 +12,9 @@ if platform.system() == 'Linux':
     unzipped = 'unzipped/'
     pgConnStr = 'host="localhost", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres.."'
 else:
-    dlCachePath = 'c:/os_ngd_features/'
-    gpkgPath = "c:\\os_ngd_features\\"
-    unzipped = "unzipped\\"
+    dlCachePath = 'C:\\os_ngd_features\\'
+    gpkgPath = "C:\\os_ngd_features\\"
+    unzipped = "unzipped"
     pgConnStr = 'host="sw2-gis.wychavon.gov.uk", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres.."'
     gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 

@@ -6,55 +6,68 @@ import requests
 import os, platform, zipfile
 
 print(platform.system()) 
+
+# Path and database parameters
 if platform.system() == 'Linux':
     dlCachePath = '/home/simon/data/ngd/features/'
     gpkgPath = '/home/simon/data/ngd/features/'
     unzipped = 'unzipped/'
-    pgConnStr = 'host="localhost", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres.."'
+    pghost = "localhost"
 else:
     dlCachePath = 'C:\\os_ngd_features\\'
-    gpkgPath = "C:\\os_ngd_features\\"
-    unzipped = "unzipped"
-    pgConnStr = 'host="sw2-gis.wychavon.gov.uk", port=5432, dbname="ngd", schema="features", user="postgres", password="postgres.."'
+    gpkgPath =  "C:\\os_ngd_features\\"
+    unzipped = 'unzipped'
+    pghost = "sw2-gis.wychavon.gov.uk"
     gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 
+pgport=5432
+pgdbname="ngd"
+pgschema="features"
+pguser="postgres"
+pgpassword="postgres.."
+
+# OS Datapackage parameters
 key = 'gP228DpHXZ2BWdrmffMmUNhzAFyuuE27'
 dp = "929"
 v = "2361"
 data = DataPackageDownload.all_products(key)
 
+# Get downloads URL for Datapackage and version ... 
 for item in data:
     if type(item) is dict:
         if item["id"] == dp and item["versions"][0]["id"] == v:
             dlUrl = item["versions"][0]["url"]
             print("dp:", dp, "v" ,v)
 
+# ... and get URLs for each file (as specified in datapackage) to download ...
 filesURL = urlopen(dlUrl)
 dl = filesURL.read()
 encoding = filesURL.info().get_content_charset('utf-8')
 files = json.loads(dl.decode(encoding))
 
+# ... write each file to local folder from URL endpoint...
 for f in files['downloads']:
     r = requests.get(f["url"], allow_redirects=True)
     file = open(dlCachePath + f["fileName"], 'wb').write(r.content)
     print("...", f["url"][48:])
 
+# ... extract each geopackage from zip file ... 
 for item in os.listdir(dlCachePath):
     if item != 'unzipped':
         with zipfile.ZipFile(os.path.join(dlCachePath, item), 'r') as zObject:
             zObject.extractall(path= dlCachePath + unzipped)
 
+# ... create ogr2ogr instance to load each gpkg into tables in features schema in ngd database, overwriting by default, table names following NGD naming scheme.  
 ogr = gdaltools.ogr2ogr()
 ogr.set_encoding("UTF-8")
-conn = gdaltools.PgConnectionString(pgConnStr)
+conn = gdaltools.PgConnectionString(host=pghost, port=pgport, dbname=pgdbname, schema=pgschema, user=pguser, password=pgpassword)
 srs = 'EPSG:27700'
 
 for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):
-    gpkgname = gpkgPath + unzipped + gpkg
+    gpkgname = os.path.join(gpkgPath, unzipped,  gpkg)
+    print("> ", gpkgname)
     tablename = gpkg[:-5]
     ogr.set_input(gpkgname, srs=srs)
-    print(gpkgname, srs)
     ogr.set_output(conn, table_name=tablename, srs=srs)
-    print(conn, tablename, srs)    
+    print(conn,  tablename,  srs)    
     ogr.execute()
-

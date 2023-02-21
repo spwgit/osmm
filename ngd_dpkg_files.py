@@ -21,7 +21,8 @@ else:
     pghost = "sw2-gis.wychavon.gov.uk"
     gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 
-pgport=5432
+
+pgport = 5432
 pgdbname="ngd"
 pgschema="features"
 pguser="postgres"
@@ -64,12 +65,12 @@ ogr.set_encoding("UTF-8")
 conn = gdaltools.PgConnectionString(host=pghost, port=pgport, dbname=pgdbname, schema=pgschema, user=pguser, password=pgpassword)
 srs = 'EPSG:27700'
 
-conn = pg.connect("host=pghost dbname=pgdbname user=pguser password=pgpassword port=pgport")
-cur = conn.cursor()
-cur.execute("DROP SCHEMA features CASCADE;")
-conn.commit()
+dropConn = pg.connect(host=pghost, dbname=pgdbname, user=pguser, password=pgpassword, port=pgport)
+cur = dropConn.cursor()
+cur.execute("DROP SCHEMA features CASCADE; COMMIT; CREATE SCHEMA features AUTHORIZATION postgres; COMMIT;")
+dropConn.commit()
 cur.close()
-conn.close()
+dropConn.close()
 
 for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):
     gpkgname = os.path.join(gpkgPath, unzipped,  gpkg)
@@ -77,7 +78,8 @@ for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):
     tablename = gpkg[:-5]
     ogr.set_input(gpkgname, srs=srs)
     #ogr2ogr -append PG:dbname=foo abc.shp --config OGR_TRUNCATE YES
-    ogr.MODE_LAYER_OVERWRITE
+    #ogr.MODE_LAYER_OVERWRITE
     ogr.set_output(conn, table_name=tablename, srs=srs)
     print(conn,  tablename,  srs)    
     ogr.execute()
+

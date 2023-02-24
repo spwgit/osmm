@@ -1,4 +1,5 @@
 from osdatahub import DataPackageDownload
+from dotenv import load_dotenv
 from urllib.request import urlopen
 import gdaltools
 import psycopg2 as pg
@@ -21,15 +22,17 @@ else:
     pghost = "sw2-gis.wychavon.gov.uk"
     gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 
-
 pgport = 5432
 pgdbname="ngd"
 pgschema="features"
 pguser="postgres"
 pgpassword="postgres.."
 
+load_dotenv()
+
 # OS Datapackage parameters
-key = 'gP228DpHXZ2BWdrmffMmUNhzAFyuuE27'
+#key = 'gP228DpHXZ2BWdrmffMmUNhzAFyuuE27'
+key = os.getenv('key')
 dp = "929"
 v = "2361"
 data = DataPackageDownload.all_products(key)
@@ -82,4 +85,3 @@ for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):
     ogr.set_output(conn, table_name=tablename, srs=srs)
     print(conn,  tablename,  srs)    
     ogr.execute()
-

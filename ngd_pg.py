@@ -30,5 +30,5 @@ for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):
     print(os.path.isfile(gpkgname), gpkgname)
     ogr.set_input(gpkgname, srs=srs)
     ogr.set_output(conn, table_name=tablename, srs=srs)
-    ogr.set_output_mode(data_source_mode=ogr.MODE_DS_CREATE_OR_UPDATE)
+    #ogr.set_output_mode(data_source_mode=ogr.MODE_DS_CREATE_OR_UPDATE)
     ogr.execute()

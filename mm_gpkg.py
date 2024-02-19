@@ -2,7 +2,7 @@ from osdatahub import DataPackageDownload
 from dotenv import load_dotenv
 from urllib.request import urlopen
 import gdaltools
-import psycopg as pg
+import psycopg2 as pg
 import json
 import pprint
 import requests
@@ -54,22 +54,23 @@ def updatePGwithGPkgs():
     # ... prepare temporary schema
     dropConn = pg.connect(host=pghost, dbname=pgdbname, user=pguser, password=pgpassword, port=pgport)
     cur = dropConn.cursor()
-    cur.execute("DROP SCHEMA mastermap_new CASCADE; COMMIT; CREATE SCHEMA mastermap_new AUTHORIZATION postgres; COMMIT;")
+    cur.execute("DROP SCHEMA mastermap CASCADE; COMMIT; CREATE SCHEMA mastermap AUTHORIZATION postgres; COMMIT;")
     dropConn.commit()
     cur.close()
     dropConn.close()
 
     # ... get gpkgs from local download location and extract pg table names from filenames
-    for gpkg in os.listdir(os.path.join(gpkgPath, unzipped)):
-        gpkgname = os.path.join(gpkgPath, unzipped,  gpkg)
-        print("> ", gpkgname)
-        tablename = gpkg[:-5]
+    for gpkg in os.listdir(os.path.join(gpkgPath, unzipped, dataFldr)):
+        print("gpkg > ",gpkg)
+        gpkgname = os.path.join(gpkgPath, unzipped, dataFldr, gpkg)
+        print("gpkgname > ", gpkgname)
+        tablename = gpkg.split("_")[2]+gpkg.split("_")[3].replace(".gpkg", "")
+        print(tablename) 
         ogr.set_input(gpkgname, srs=srs)
-        ogr.set_output(conn, table_name=tablename, srs=srs)
         print(conn,  tablename,  srs)    
+        ogr.set_output(conn, table_name=tablename, srs=srs)
         # ... run ogr to create tables from respective gpkg
         ogr.execute()
-
 
 print(platform.system()) 
 
@@ -78,55 +79,28 @@ if platform.system() == 'Linux':
     dlCachePath = '/home/simon/data/ngd/features/'
     gpkgPath = '/home/simon/data/ngd/features/'
     unzipped = 'unzipped/'
-    data = 'Data/'
+    dataFldr = 'Data/'
+    #pghost = "192.168.4.26"
     pghost = "localhost"
     pgport = 5432
-else:                   # Windows
+# Windows
+else:                   
     dlCachePath = 'C:\\osmm\\gpkg\\'
     gpkgPath =  "C:\\osmm\\gpkg\\"
     unzipped = 'unzipped'
-    data = 'Data'
+    dataFldr = 'Data'
     pghost = "localhost"    #"sw2-gis.wychavon.gov.uk"
     pgport = 5433
     gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
 
-
-#### CAUTION
-
-#       A CLI interface dotenv is also included, which helps you manipulate the .env file without manually opening it.
-
-#       $ pip install "python-dotenv[cli]"
-#       $ dotenv set USER foo
-#       $ dotenv set EMAIL foo@example.org
-#       $ dotenv list
-#       USER=foo
-#       EMAIL=foo@example.org
-#   $ dotenv list --format=json
-#   {
-#     "USER": "foo",
-#     "EMAIL": "foo@example.org"
-#   }
-#   $ dotenv run -- python foo.py
-
-# CAUTION pgdbname="base_mapping"
-# CAUTION pgschema="mastermap_new"
-# CAUTION pguser="postgres"
-# CAUTION pgpassword="postgres.."
-
-
-#### END CAUTION
-
-#### F*ck it it's a demo
 pgdbname="base_mapping"
-pgschema="mastermap_new"
+pgschema="mastermap"
 pguser="postgres"
 pgpassword="postgres.."
-#### End F*ck it ... smoke, sleep, La petite mort ?
 
-
-load_dotenv()
+#load_dotenv()
 # OS Datapackage parameters
-# key = os.getenv('key')  # AlcbyOhqAOIcVP1XCD37WGG33qsSntiy
+#key = os.getenv('AlcbyOhqAOIcVP1XCD37WGG33qsSntiy') 
 key = 'AlcbyOhqAOIcVP1XCD37WGG33qsSntiy'
 dp = "0040174475"       #look up from OS datapackages page
 data = DataPackageDownload.all_products(key)
@@ -137,6 +111,9 @@ latestDate = datetime.strptime(latestDate, '%m/%d/%y')
 dpv = getLastestURL(latestDate)
 pprint.pp(dpv)
 
-# ... download latest gpkg zips
-downloadGPkgs(dpv)
+downloadGPkgs(dpv)      # download latest gpkg zips
 
+unzipGPkgs()            # unzip gpkgs ito sub-folder
+
+updatePGwithGPkgs()     # create ogr2ogr instance to load each gpkg into tables in mastermap_new schema in base_mapping  
+                        # database, overwriting by default, table names following NGD naming scheme.  

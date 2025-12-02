@@ -1,6 +1,7 @@
 from osdatahub import DataPackageDownload
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from urllib.request import urlopen
+from pathlib import Path
 import gdaltools
 import psycopg2 as pg
 import json
@@ -16,6 +17,7 @@ def getLastestURL(latestDate):
                 for i in item["versions"]:
                     thisDate = datetime.strptime(i["createdOn"], '%Y-%m-%d')
                     if thisDate > latestDate:
+                        print(latestDate, thisDate)
                         latestDate = thisDate
                         dpVersion = {"createdOn" : thisDate.strftime("%Y-%m-%d"),
                                      "productVersion" :  i["productVersion"],
@@ -26,13 +28,15 @@ def getLastestURL(latestDate):
 def downloadGPkgs(dpversion):
 
     filesURL = urlopen(dpversion["url"])
+    print(dpversion["url"])
     dl = filesURL.read()
     encoding = filesURL.info().get_content_charset('utf-8')
     files = json.loads(dl.decode(encoding))
+    emptyExistingFiles(dlCachePath)
     for f in files["downloads"]:
         if f["fileName"][-4:] == ".zip":
             print(f["fileName"], ": download - actual data file")
-            r = requests.get(f["url"], allow_redirects=True)
+            r = requests.get(f["url"], allow_redirects=True, verify=False)
             file = open(dlCachePath + f["fileName"], 'wb').write(r.content)
             print("...", f["url"][48:])
         else:
@@ -54,7 +58,7 @@ def updatePGwithGPkgs():
     # ... prepare temporary schema
     dropConn = pg.connect(host=pghost, dbname=pgdbname, user=pguser, password=pgpassword, port=pgport)
     cur = dropConn.cursor()
-    cur.execute("DROP SCHEMA mastermap CASCADE; COMMIT; CREATE SCHEMA mastermap AUTHORIZATION postgres; COMMIT;")
+    cur.execute("DROP SCHEMA mastermap_new CASCADE; COMMIT; CREATE SCHEMA mastermap_new AUTHORIZATION postgres; COMMIT;")
     dropConn.commit()
     cur.close()
     dropConn.close()
@@ -72,6 +76,19 @@ def updatePGwithGPkgs():
         # ... run ogr to create tables from respective gpkg
         ogr.execute()
 
+def renameGPKGColNames():
+    pass
+
+def emptyExistingFiles(dlPath):
+    path = dlPath
+    for root,dirs,files in os.walk(path):  
+        for name in files:
+            filename = os.path.join(root,name)   
+            # print(os.path.isdir(path))
+            if not (os.path.isdir(path)):  
+                print(" Removing ",filename)  
+                os.remove(filename)  
+
 print(platform.system()) 
 
 # Path and database parameters #
@@ -83,37 +100,36 @@ if platform.system() == 'Linux':
     #pghost = "192.168.4.26"
     pghost = "localhost"
     pgport = 5432
-# Windows
 else:                   
-    dlCachePath = 'C:\\osmm\\gpkg\\'
-    gpkgPath =  "C:\\osmm\\gpkg\\"
+# Windows
+    dlCachePath = 'D:\\map_data\\osmm\\gpkg\\'
+    gpkgPath =  "D:\\map_data\\osmm\\gpkg\\"
     unzipped = 'unzipped'
-    dataFldr = 'Data'
-    pghost = "localhost"    #"sw2-gis.wychavon.gov.uk"
-    pgport = 5433
-    gdaltools.Wrapper.BASEPATH = "C:\Program Files\GDAL"
+    dataFldr = 'Data' 
+    pghost = "sw2-gis.wychavon.gov.uk" #"localhost"
+    pgport = 5432 #5433
+    gdaltools.Wrapper.BASEPATH = "C:\\Program Files\\GDAL"
 
+load_dotenv()
 pgdbname="base_mapping"
-pgschema="mastermap"
-pguser="postgres"
-pgpassword="postgres.."
+pgschema="mastermap_new"
+pguser = os.environ.get("pguser")
+pgpassword = os.environ.get("pgpassword")
 
-#load_dotenv()
 # OS Datapackage parameters
-#key = os.getenv('AlcbyOhqAOIcVP1XCD37WGG33qsSntiy') 
-key = 'AlcbyOhqAOIcVP1XCD37WGG33qsSntiy'
+key = os.environ.get("key")
+print(key, pguser) 
+
 dp = "0040174475"       #look up from OS datapackages page
 data = DataPackageDownload.all_products(key)
 
 # Get downloads URL for Datapackage
-latestDate = '01/01/23'
-latestDate = datetime.strptime(latestDate, '%m/%d/%y')
+latestDate = datetime.strptime(os.environ.get("latestDate"), '%m/%d/%y')
 dpv = getLastestURL(latestDate)
-pprint.pp(dpv)
 
 downloadGPkgs(dpv)      # download latest gpkg zips
 
-unzipGPkgs()            # unzip gpkgs ito sub-folder
+#unzipGPkgs()            # unzip gpkgs ito sub-folder
 
-updatePGwithGPkgs()     # create ogr2ogr instance to load each gpkg into tables in mastermap_new schema in base_mapping  
+#updatePGwithGPkgs()     # create ogr2ogr instance to load each gpkg into tables in mastermap_new schema in base_mapping  
                         # database, overwriting by default, table names following NGD naming scheme.  

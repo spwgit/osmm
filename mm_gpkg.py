@@ -83,7 +83,8 @@ def emptyExistingFiles(dlPath):
     path = dlPath
     for root,dirs,files in os.walk(path):  
         for name in files:
-            filename = os.path.join(root,name)   
+            filename = os.path.join(root,name) 
+            print(filename, "|",  os.path.isfile(filename))  
             # print(os.path.isdir(path))
             if not (os.path.isdir(path)):  
                 print(" Removing ",filename)  

@@ -1,5 +1,5 @@
 from osdatahub import DataPackageDownload
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv, find_dotenv, set_key
 from urllib.request import urlopen
 from pathlib import Path
 import gdaltools
@@ -10,14 +10,16 @@ import requests
 import os, platform, zipfile
 from datetime import datetime
 
-def getLastestURL(latestDate):
+from mmUsrPerms import mmPermSQL 
+
+def getLatestURL(latestDate):
     for item in data:
         if type(item) is dict:
             if item["id"] == dp:
                 for i in item["versions"]:
                     thisDate = datetime.strptime(i["createdOn"], '%Y-%m-%d')
                     if thisDate > latestDate:
-                        print(latestDate, thisDate)
+                        print("Previous: ",latestDate, "Latest: ", thisDate)
                         latestDate = thisDate
                         dpVersion = {"createdOn" : thisDate.strftime("%Y-%m-%d"),
                                      "productVersion" :  i["productVersion"],
@@ -56,12 +58,11 @@ def updatePGwithGPkgs():
     srs = 'EPSG:27700'
 
     # ... prepare temporary schema
-    dropConn = pg.connect(host=pghost, dbname=pgdbname, user=pguser, password=pgpassword, port=pgport)
-    cur = dropConn.cursor()
-    cur.execute("DROP SCHEMA mastermap_new CASCADE; COMMIT; CREATE SCHEMA mastermap_new AUTHORIZATION postgres; COMMIT;")
-    dropConn.commit()
+    Conn = pg.connect(host=pghost, dbname=pgdbname, user=pguser, password=pgpassword, port=pgport)
+    cur = Conn.cursor()
+    cur.execute("DROP SCHEMA IF EXISTS mastermap_new CASCADE; COMMIT; DROP SCHEMA IF EXISTS mastermap_old CASCADE; COMMIT; CREATE SCHEMA mastermap_new AUTHORIZATION postgres;")
     cur.close()
-    dropConn.close()
+    Conn.commit()
 
     # ... get gpkgs from local download location and extract pg table names from filenames
     for gpkg in os.listdir(os.path.join(gpkgPath, unzipped, dataFldr)):
@@ -75,62 +76,130 @@ def updatePGwithGPkgs():
         ogr.set_output(conn, table_name=tablename, srs=srs)
         # ... run ogr to create tables from respective gpkg
         ogr.execute()
+    cur.close()
+    Conn.close()
+    
+def renameSchema():
+    Conn = pg.connect(host=pghost, dbname=pgdbname, user=pguser, password=pgpassword, port=pgport)
+    cur = Conn.cursor()
+    # tidy up text_string column name
+    cur.execute("ALTER TABLE mastermap_new.cartographictext RENAME text_string TO textstring;")
+    Conn.commit()
+    # it it exists move current live mastermap out of the way as mastermap_old
+    try:
+        cur.execute("ALTER SCHEMA mastermap RENAME TO mastermap_old;")
+        Conn.commit()
+    except:
+        print("Mastermap schema does not exist")
+    # remane new tables to mastermap
+    cur.execute("ALTER SCHEMA mastermap_new RENAME TO mastermap;")
+    Conn.commit()
+    # apply schema permissions to authority adimns and users
+    cur.execute(mmPermSQL)
 
-def renameGPKGColNames():
-    pass
+    Conn.commit()
+    cur.close()
+    Conn.close()
 
-def emptyExistingFiles(dlPath):
-    path = dlPath
-    for root,dirs,files in os.walk(path):  
-        for name in files:
-            filename = os.path.join(root,name) 
-            print(filename, "|",  os.path.isfile(filename))  
-            # print(os.path.isdir(path))
-            if not (os.path.isdir(path)):  
-                print(" Removing ",filename)  
-                os.remove(filename)  
+def emptyExistingFiles(directory_path):
+    """
+    Walks through the provided directory path and deletes all files,
+    but keeps the directory structure (folders) intact.
+    """
+    
+    # Check if the directory actually exists
+    if not os.path.exists(directory_path):
+        print(f"Error: The directory '{directory_path}' does not exist.")
+        return
+
+    print(f"Starting cleanup in: {directory_path}")
+    
+    deleted_count = 0
+    errors = 0
+
+    # os.walk yields a 3-tuple (dirpath, dirnames, filenames)
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            try:
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
+                deleted_count += 1
+            except OSError as e:
+                print(f"Error deleting {file_path}: {e}")
+                errors += 1
+
+    print("-" * 30)
+    print("Cleanup complete.")
+    print(f"Total files deleted: {deleted_count}")
+    print(f"Errors encountered: {errors}")
+
+def writeUpdatesToEnv():
+    print(dpv["createdOn"])
+    set_key(dotenv_file,"latestDate", dpv["createdOn"])
+
+def downloadAndImportNewGpkgs(dpv, gpkgPath):
+
+    emptyExistingFiles(gpkgPath)
+    downloadGPkgs(dpv)      # download latest gpkg zips
+    unzipGPkgs()            # unzip gpkgs ito sub-folder
+    updatePGwithGPkgs()     # create ogr2ogr instance to load each gpkg into tables in mastermap_new schema in base_mapping  
+                            # database, overwriting by default
 
 print(platform.system()) 
 
-# Path and database parameters #
-if platform.system() == 'Linux':
-    dlCachePath = '/home/simon/data/ngd/features/'
-    gpkgPath = '/home/simon/data/ngd/features/'
-    unzipped = 'unzipped/'
-    dataFldr = 'Data/'
-    #pghost = "192.168.4.26"
-    pghost = "localhost"
-    pgport = 5432
-else:                   
-# Windows
-    dlCachePath = 'D:\\map_data\\osmm\\gpkg\\'
-    gpkgPath =  "D:\\map_data\\osmm\\gpkg\\"
-    unzipped = 'unzipped'
-    dataFldr = 'Data' 
-    pghost = "sw2-gis.wychavon.gov.uk" #"localhost"
-    pgport = 5432 #5433
-    gdaltools.Wrapper.BASEPATH = "C:\\Program Files\\GDAL"
+dotenv_file = find_dotenv()
+load_dotenv(dotenv_file)
 
-load_dotenv()
-pgdbname="base_mapping"
-pgschema="mastermap_new"
-pguser = os.environ.get("pguser")
+# OS/Platform dependant settings
+if platform.system() == 'Linux':
+    sysPrefix = 'linux'
+
+else:   # Windows
+    sysPrefix = 'win'
+    gdaltools.Wrapper.BASEPATH = os.environ.get("win_dataFldrgdaltool_Wrapper_BASEPATH")
+    os.environ['PROJ_LIB'] = os.environ.get("win_os_environ_PROJ_LIB") 
+
+# Path and database parameters #
+dlCachePath = os.environ.get(sysPrefix + "_dlCachePath")  
+gpkgPath = os.environ.get(sysPrefix + "_gpkgPath") 
+permsPath = os.environ.get(sysPrefix + "_permsPath") 
+unzipped = os.environ.get(sysPrefix + "_unzipped")
+dataFldr = os.environ.get(sysPrefix + "_dataFldr")
+pghost = os.environ.get(sysPrefix + "_pghost") 
+pgport = os.environ.get(sysPrefix + "_pgport") 
+
+# PG Database parameters
+pgdbname = os.environ.get("pgDBName")
+pgschema = os.environ.get("pgSchema") 
+pguser = os.environ.get("pgUser") 
 pgpassword = os.environ.get("pgpassword")
 
 # OS Datapackage parameters
 key = os.environ.get("key")
+dp = os.environ.get("mastermapDataPackageID") # NTS: look up from OS datapackages page?
 print(key, pguser) 
-
-dp = "0040174475"       #look up from OS datapackages page
 data = DataPackageDownload.all_products(key)
 
 # Get downloads URL for Datapackage
-latestDate = datetime.strptime(os.environ.get("latestDate"), '%m/%d/%y')
-dpv = getLastestURL(latestDate)
+latestDate = datetime.strptime(os.environ.get("latestDate"), '%Y-%m-%d')
+try:
+    dpv = getLatestURL(latestDate)
+    pprint.pprint(dpv)
+    
+    try:
+        downloadAndImportNewGpkgs(dpv, gpkgPath)
+    except:
+        print("A problem occured while attemping to download updated packages")
+        pass
+    try:
+        renameSchema()          # rename newly created schema to original name
+    except:
+        print("A problem occured while attemping to PG database schema")
+    
+    writeUpdatesToEnv()
+except:
+    print("The latest South Worcestershire Mastermap Geopackages are installed in the Postgres base_mapping mastermap schema")
 
-downloadGPkgs(dpv)      # download latest gpkg zips
 
-#unzipGPkgs()            # unzip gpkgs ito sub-folder
-
-#updatePGwithGPkgs()     # create ogr2ogr instance to load each gpkg into tables in mastermap_new schema in base_mapping  
-                        # database, overwriting by default, table names following NGD naming scheme.  

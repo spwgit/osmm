@@ -102,11 +102,7 @@ def renameSchema():
     Conn.close()
 
 def emptyExistingFiles(directory_path):
-    """
-    Walks through the provided directory path and deletes all files,
-    but keeps the directory structure (folders) intact.
-    """
-    
+    # Walks through the provided directory path and deletes all files, but keeps the directory structure (folders) intact.
     # Check if the directory actually exists
     if not os.path.exists(directory_path):
         print(f"Error: The directory '{directory_path}' does not exist.")
